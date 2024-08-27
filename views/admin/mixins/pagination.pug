@@ -1,0 +1,22 @@
+mixin pagination(pagination)
+      nav
+        ul.pagination
+          if(pagination.currentPage>1)
+            li.page-item 
+              button(
+                class="page-link"
+                button-pagination=pagination.currentPage - 1
+              ) Trang trước
+          // Generate an array from 1 to pagination.totalPage and iterate over it
+          each page in Array.from({ length: pagination.totalPage }, (_, i) => i + 1)
+            li(class=`page-item ${pagination.currentPage == page ? 'active' : ''}`)
+              button(
+                class="page-link"
+                button-pagination=page
+              ) #{page}
+          if(pagination.currentPage<pagination.totalPage)
+            li.page-item 
+              button(
+                class="page-link"
+                button-pagination=pagination.currentPage +1
+              ) Trang sau
