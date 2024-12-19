@@ -1,0 +1,39 @@
+extends ../../layouts/default.pug
+include ../../mixins/alert.pug
+
+block main 
+    +alert-error(5000)
+    +alert-success(5000)
+
+    h1(class='mb-4') Edit a role 
+
+    form(
+        action=`${prefixAdmin}/roles/edit/${record.id}?_method=PATCH`
+        method='POST'
+    )
+        div(class='form-group')
+            label(for='title') Title
+            input(
+                type='text'
+                id='title'
+                class='form-control'
+                name='title'
+                required
+                value=record.title
+            )
+        
+        div(class='form-group')
+            label(for='desc') Description 
+            input(
+                type='text'
+                id='desc'
+                class='form-control'
+                name='description'
+                value=record.description
+            )
+
+        div(class='form-group')
+            button(
+                type='submit'
+                class='btn btn-primary'
+            ) Update

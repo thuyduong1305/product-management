@@ -1,9 +1,12 @@
 const Product = require("../../models/product.model");
+const Account = require("../../models/account.model");
+const ProductCategory = require("../../models/product-category.model");
 const filterStatusHelper = require("../../helper/filterStatus.js");
 const searchHelper = require("../../helper/search.js");
 const paginationHelper = require("../../helper/pagination.js");
 const { request } = require("express");
 const systemConfig = require("../../config/system");
+const createTreeHelper = require("../../helper/create-tree.js");
 
 // [GET] /admin/products
 const product = async (req, res) => {
@@ -25,10 +28,30 @@ const product = async (req, res) => {
     countProducts
   );
   // console.log(objectPagination);
+  let sort = {};
+  if (req.query.sortKey) {
+    sort[req.query.sortKey] = req.query.sortValue;
+  } else {
+    sort.position = "desc";
+  }
   const products = await Product.find(find)
-    .sort({ position: "desc" })
+    .sort(sort)
     .limit(objectPagination.limitItems)
     .skip(objectPagination.skip);
+  for (const item of products) {
+    const account = await Account.findOne({ _id: item.createdBy.account_id });
+    if (account) {
+      item.createdBy.fullName = account.fullName;
+    }
+    const updatedBy = item.updatedBy.slice(-1)[0];
+    if (updatedBy) {
+      const user = await Account.findOne({ _id: updatedBy.account_id });
+      if (user) {
+        updatedBy.fullName = user.fullName;
+      }
+    }
+  }
+
   res.render("admin/pages/products/index", {
     pageTitle: "Trang sản phẩm",
     products: products,
@@ -86,17 +109,27 @@ const changeMulti = async (req, res) => {
 
 const deleteItem = async (req, res) => {
   const id = req.params.id;
+
   await Product.updateOne(
     { _id: id },
-    { deleted: true, deletedAt: Date.now() }
+    {
+      deleted: true,
+      deletedBy: {
+        account_id: res.locals.user.id,
+        deletedAt: Date.now,
+      },
+    }
   );
   res.redirect("back");
 };
 
 // [POST] /admin/products/create
 const create = async (req, res) => {
+  const record = await ProductCategory.find({ deleted: false });
+  const newRecords = createTreeHelper(record);
   res.render("admin/pages/products/create", {
     pageTitle: "Tạo mới sản phẩm",
+    records: newRecords,
   });
 };
 
@@ -104,14 +137,16 @@ const createPost = async (req, res) => {
   req.body.price = parseInt(req.body.price);
   req.body.discountPercentage = parseInt(req.body.discountPercentage);
   req.body.stock = parseInt(req.body.stock);
-  // console.log(req.body);
+  console.log(req.body);
+  req.body.createdBy = {
+    account_id: res.locals.user.id,
+  };
   if (req.body.position == "") {
     const countProducts = await Product.countDocuments();
     req.body.position = countProducts + 1;
   } else {
     req.body.position = parseInt(req.body.position);
   }
-  req.body.thumbnail = `/uploads/${req.file.filename}`;
 
   const product = new Product(req.body);
   await product.save();
@@ -127,9 +162,12 @@ const edit = async (req, res) => {
       _id: req.params.id,
     };
     const product = await Product.findOne(find);
+    const record = await ProductCategory.find({ deleted: false });
+    const newRecords = createTreeHelper(record);
     res.render("admin/pages/products/edit", {
       pageTitle: "Sửa sản phẩm",
       product: product,
+      records: newRecords,
     });
   } catch (error) {
     res.redirect(`${systemConfig.prefixAdmin}/products`);
@@ -144,11 +182,20 @@ const editPatch = async (req, res) => {
   // console.log(req.body);
 
   req.body.position = parseInt(req.body.position);
-  if (req.file) {
-    req.body.thumbnail = `/uploads/${req.file.filename}`;
-  }
+
   try {
-    await Product.updateOne({ _id: req.params.id }, req.body);
+    const updatedBy = {
+      account_id: res.locals.user.id,
+      updatedAt: Date.now(),
+    };
+
+    await Product.updateOne(
+      { _id: req.params.id },
+      {
+        $set: req.body,
+        $push: { updatedBy: updatedBy },
+      }
+    );
     req.flash("success", "Edit product successfully!");
     res.redirect(`back`);
   } catch (error) {
